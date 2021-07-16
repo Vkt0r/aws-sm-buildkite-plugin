@@ -12,6 +12,8 @@ function get_secret_value() {
   local allowBinary="${2:-}"
   local regionFlag=""
   local endpointUrlFlag=""
+  local assumeRoleArn=""
+  local roleSessionName=""
 
   # secret is an arn rather than name, deduce the region
   local arnRegex='^arn:aws:secretsmanager:([^:]+):'
@@ -25,6 +27,22 @@ function get_secret_value() {
 
   if [[ -n "${BUILDKITE_PLUGIN_AWS_SM_ENDPOINT_URL}" ]] ; then
     endpointUrlFlag="--endpoint-url ${BUILDKITE_PLUGIN_AWS_SM_ENDPOINT_URL}"
+  fi
+
+  if [[ -n "${BUILDKITE_PLUGIN_AWS_SM_ASSUME_ROLE_ARN}" ]] ; then
+    roleSessionName="--role-session-name ${BUILDKITE_PLUGIN_AWS_SM_ROLE_SESSION_NAME:-default_session}"
+    assumeRoleArn="--role-arn ${BUILDKITE_PLUGIN_AWS_SM_ASSUME_ROLE_ARN}"
+    tempRole=$(aws sts assume-role $assumeRoleArn $roleSessionName)
+
+    result=$?
+    echo -e "\033[0m" >&2
+    if [[ $result -ne 0 ]]; then
+      exit 1
+    fi
+
+    export AWS_ACCESS_KEY_ID=$(echo "${tempRole}" | jq -r '.Credentials.AccessKeyId')
+    export AWS_SECRET_ACCESS_KEY=$(echo "${tempRole}" | jq -r '.Credentials.SecretAccessKey')
+    export AWS_SESSION_TOKEN=$(echo "${tempRole}" | jq -r '.Credentials.SessionToken')
   fi
 
   # Extract the secret string and secret binary

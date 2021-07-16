@@ -16,4 +16,8 @@ configuration:
       type: array
     region:
       type: string
+    assume-role-arn:
+      type: string
+    role-session-name:
+      type: string
   required: []
