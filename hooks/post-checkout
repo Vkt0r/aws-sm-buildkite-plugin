@@ -11,6 +11,25 @@ if [[ "${BUILDKITE_PLUGIN_AWS_SM_DEBUG:-false}" =~ (true|on|1) ]]; then
   set -x
 fi
 
+load_all_secrets_into_file() {
+  local secret_id="$1"
+  local json_key="$2"
+  local file_name = "$3"
+  local secret_value
+
+  echo "Reading all environment variables from ${secret_id} in AWS SM"
+  secret_value="$(get_secret_value "${secret_id}")"
+  local IFS=$'\n'
+  # the variable is sanitised in jq to avoid problems with keys containing =
+  # raw output isn't used here to avoid messing the secrets that contain spaces
+  for s in $(jq "${json_key}" <<< "${secret_value}" | jq 'to_entries[] | (.key | sub("[^A-Za-z0-9_]"; "_"; "g")) + "=" + .value'); do
+    # convert JSON strings back into raw, e.g \n -> becomes a newline
+    s="$(jq -r '.' <<< "${s}")"
+    echo "Setting environment variable $(sed s/=.*//g <<< "$s")"
+    echo "$s" >> $file_name
+  done
+}
+
 # parse file items
 while IFS='=' read -r name _ ; do
   if [[ $name =~ ^(BUILDKITE_PLUGIN_AWS_SM_FILE_[0-9]+_SECRET_ID)$ ]] ; then
@@ -20,5 +39,25 @@ while IFS='=' read -r name _ ; do
     path=$(strip_quotes "${!pathVar}")
     echo "Reading ${secretId} from AWS SM into file ${path}"
     get_secret_value "${secretId}" 'allow-binary' > "${path}"
+  elif [[ $name =~ ^(BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE) ]] ; then
+
+    fileName=${BUILDKITE_PLUGIN_AWS_SM_FILE_NAME:-secrets.txt}
+
+    # handle json-to-file: config
+    if [[ $name =~ (_SECRET_ID)$ ]] ; then
+
+      # Creates the file to save the secrets
+      touch $fileName
+
+      # get the secret key to pull all the ENV variables from
+      export_id=$(echo "${name}" | sed 's/^BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE//' | sed 's/_SECRET_ID$//')
+      # load the JSON key if we have one
+      json_key_var="BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE${export_id}_JSON_KEY"
+      json_key="${!json_key_var:-.}"
+
+      secret_id="$(strip_quotes "${!name}")"
+      load_all_secrets_into_file "${secret_id}" "${json_key}" "${fileName}"
+    fi
+  fi
   fi
 done < <(env | sort)
