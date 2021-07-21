@@ -59,5 +59,4 @@ while IFS='=' read -r name _ ; do
       load_all_secrets_into_file "${secret_id}" "${json_key}" "${fileName}"
     fi
   fi
-  fi
 done < <(env | sort)
