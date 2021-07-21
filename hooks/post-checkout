@@ -14,7 +14,7 @@ fi
 load_all_secrets_into_file() {
   local secret_id="$1"
   local json_key="$2"
-  local file_name = "$3"
+  local file_name="$3"
   local secret_value
 
   echo "Reading all environment variables from ${secret_id} in AWS SM"
