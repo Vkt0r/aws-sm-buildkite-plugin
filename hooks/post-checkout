@@ -22,7 +22,7 @@ load_all_secrets_into_file() {
   local IFS=$'\n'
   # the variable is sanitised in jq to avoid problems with keys containing =
   # raw output isn't used here to avoid messing the secrets that contain spaces
-  for s in $(jq "${json_key}" <<< "${secret_value}" | jq 'to_entries[] | (.key | sub("[^A-Za-z0-9_]"; "_"; "g")) + "=" + .value'); do
+  for s in $(jq "${json_key}" <<< "${secret_value}" | jq 'to_entries[] | (.key | sub("[^A-Za-z0-9_]"; "_"; "g")) + " = " + .value'); do
     # convert JSON strings back into raw, e.g \n -> becomes a newline
     s="$(jq -r '.' <<< "${s}")"
     echo "Setting environment variable $(sed s/=.*//g <<< "$s")"
