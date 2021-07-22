@@ -32,6 +32,7 @@ load_all_secrets_into_file() {
 
 # parse file items
 while IFS='=' read -r name _ ; do
+  echo "Name: $name"
   if [[ $name =~ ^(BUILDKITE_PLUGIN_AWS_SM_FILE_[0-9]+_SECRET_ID)$ ]] ; then
     itemVar=$(echo "${name}" | sed 's/_SECRET_ID$//')
     secretId=$(strip_quotes "${!name}")
