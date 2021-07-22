@@ -14,7 +14,7 @@ fi
 load_all_secrets_into_file() {
   local secret_id="$1"
   local json_key="$2"
-  local file_name="$3"
+  local file_path="$3"
   local secret_value
 
   echo "Reading all environment variables from ${secret_id} in AWS SM"
@@ -26,13 +26,12 @@ load_all_secrets_into_file() {
     # convert JSON strings back into raw, e.g \n -> becomes a newline
     s="$(jq -r '.' <<< "${s}")"
     echo "Setting environment variable $(sed s/=.*//g <<< "$s")"
-    echo "$s" >> $file_name
+    echo "$s" >> $file_path
   done
 }
 
 # parse file items
 while IFS='=' read -r name _ ; do
-  echo "Name: $name"
   if [[ $name =~ ^(BUILDKITE_PLUGIN_AWS_SM_FILE_[0-9]+_SECRET_ID)$ ]] ; then
     itemVar=$(echo "${name}" | sed 's/_SECRET_ID$//')
     secretId=$(strip_quotes "${!name}")
@@ -40,24 +39,29 @@ while IFS='=' read -r name _ ; do
     path=$(strip_quotes "${!pathVar}")
     echo "Reading ${secretId} from AWS SM into file ${path}"
     get_secret_value "${secretId}" 'allow-binary' > "${path}"
-  elif [[ $name =~ ^(BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE) ]] ; then
-
-    fileName=${BUILDKITE_PLUGIN_AWS_SM_FILE_NAME:-secrets.txt}
-
+  elif [[ $name =~ ^(BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE_[0-9]+_SECRET_ID)$ ]] ; then 
     # handle json-to-file: config
-    if [[ $name =~ (_SECRET_ID)$ ]] ; then
+    
+    # get the secret key to pull all the ENV variables from
+    itemVar=$(echo "${name}" | sed 's/_SECRET_ID$//')
+    secretId=$(strip_quotes "${!name}")
 
-      # Creates the file to save the secrets
-      touch $fileName
+    # get the paht of the file to persist the secrets
+    pathVar="${itemVar}_PATH"
+    path=$(strip_quotes "${!pathVar}")
 
-      # get the secret key to pull all the ENV variables from
-      export_id=$(echo "${name}" | sed 's/^BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE//' | sed 's/_SECRET_ID$//')
-      # load the JSON key if we have one
-      json_key_var="BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE${export_id}_JSON_KEY"
-      json_key="${!json_key_var:-.}"
-
-      secret_id="$(strip_quotes "${!name}")"
-      load_all_secrets_into_file "${secret_id}" "${json_key}" "${fileName}"
+    if [ ! -f "$path" ]; then
+      echo -e "\033[0m" >&2
+      echo -e "The file at $path doesn't exist. Please specify a valid path."
+      exit 1
     fi
+
+    export_id=$(echo "${name}" | sed 's/^BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE//' | sed 's/_SECRET_ID$//')
+    # load the JSON key if we have one
+    json_key_var="BUILDKITE_PLUGIN_AWS_SM_JSON_TO_FILE${export_id}_JSON_KEY"
+    json_key="${!json_key_var:-.}"
+
+    secret_id="$(strip_quotes "${!name}")"
+    load_all_secrets_into_file "${secret_id}" "${json_key}" "${path}"
   fi
 done < <(env | sort)
